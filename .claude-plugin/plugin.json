@@ -1,1 +1,1 @@
-{ "name": "gsd-band", "version": "0.3.0", "description": "Painel GSD (milestone, progresso, fases D/P/E) acima do prompt quando há milestone em progresso", "types": "./types/index.d.ts" }
+{ "name": "gsd-band", "version": "0.3.1", "description": "Painel GSD (milestone, progresso, fases D/P/E) acima do prompt quando há milestone em progresso", "types": "./types/index.d.ts" }

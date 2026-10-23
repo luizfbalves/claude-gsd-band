@@ -79,25 +79,28 @@ export const register: Register = on => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const filled = Math.round((data.done / data.total) * BAR)
     const percent = Math.round((data.done / data.total) * 100)
-    const isCompact = e.props.maxRows < data.rows.length + 4
+    const isCompact = e.props.maxRows < data.rows.length + 5
     const rows = isCompact ? data.rows.filter(r => r.status !== 'Concluída').slice(0, 1) : data.rows
 
     const header = (
-      <Box>
-        <Text dimColor>
-          GSD ► MANAGER · {data.version} {data.name}{' '}
-        </Text>
-        <Button
-          key="clear"
-          label="/clear"
-          onPress={() => $.command.run({ command: 'clear' }).catch(err => $.ui.toast(`/clear falhou: ${err}`))}
-        />
+      <Box flexDirection="column">
+        <Text dimColor>{'─'.repeat(Math.max(1, e.props.bodyColumns))}</Text>
+        <Box>
+          <Text dimColor>
+            GSD ► MANAGER · {data.version} {data.name}{' '}
+          </Text>
+          <Button
+            key="clear"
+            label="/clear"
+            onPress={() => $.command.run({ command: 'clear' }).catch(err => $.ui.toast(`/clear falhou: ${err}`))}
+          />
+        </Box>
       </Box>
     )
 
     if (e.surface === 'terminal') {
       const { Raster } = $.ui.resolve(e)
-      const grid = buildGrid(data, e.props.bodyColumns, e.props.maxRows < data.rows.length + 3)
+      const grid = buildGrid(data, e.props.bodyColumns, e.props.maxRows < data.rows.length + 4)
 
       return (
         <Box flexDirection="column" marginBottom={1}>
