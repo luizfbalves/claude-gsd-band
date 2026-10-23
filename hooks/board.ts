@@ -50,7 +50,7 @@ export const buildBoard = (
   let isReadyTaken = false
   const rows: PhaseRow[] = phases.map((phase, i) => {
     const f = files.get(Number(phase.number)) ?? { hasContext: false, plans: 0, summaries: 0 }
-    const base = { number: phase.number, name: phase.name }
+    const base = { number: phase.number, name: phase.name, plans: f.plans, summaries: f.summaries }
     if (phase.isChecked || (f.plans > 0 && f.summaries >= f.plans)) {
       return { ...base, d: 'done', p: 'done', e: 'done', status: 'Concluída' }
     }

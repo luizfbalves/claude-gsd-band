@@ -46,6 +46,15 @@ No app desktop, onde `/plugin` não funciona: clique em **+** ao lado do prompt,
 | `○` | pronto para começar |
 | `·` | depende de uma fase anterior |
 
+No terminal o painel é desenhado célula a célula (`Raster`):
+
+- a barra tem um segmento por fase, com largura proporcional ao número de planos e preenchimento com precisão de ⅛ de célula;
+- D / P / E viram blocos coloridos: verde feito, amarelo em andamento, ciano pronto, cinza bloqueado;
+- cada plano da fase é um quadrado, `■` com SUMMARY e `□` sem;
+- `▶` marca a primeira fase não concluída.
+
+No app desktop, no VS Code e no celular continua a tabela em texto com as marcas acima.
+
 Só a primeira fase ainda não discutida aparece como **Pronta para discussão**. As seguintes aparecem como **Aguarda fase N**.
 
 ## Quando aparece
@@ -77,6 +86,7 @@ Nada é gravado no projeto, o mod só lê esses arquivos. Ele relê tudo ao abri
 ```
 hooks/board.ts       leitura do STATE.md e do ROADMAP.md, montagem das linhas
 hooks/register.tsx   eventos, atualização e desenho do painel
+hooks/raster.ts      células do painel no terminal
 types/index.d.ts     contrato do estado do mod
 tests/               testes com dados de exemplo
 ```

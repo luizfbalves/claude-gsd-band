@@ -41,10 +41,42 @@ const seed = (on: Parameters<Parameters<typeof test>[1]>[1], state = STATE) => {
   on('fs.list', (_, e) => ({ value: LISTS[e.path ?? ''] ?? [] }))
 }
 
-test('mostra fases do milestone em progresso', async ($, on) => {
+const DESKTOP = { ...BAND, surface: 'desktop' } as const
+
+const rasterText = (cells: string, columns: number): string[] => {
+  const bin = atob(cells)
+  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0))
+  const words = new Uint32Array(bytes.buffer)
+  const lines: string[] = []
+  for (let i = 0; i < words.length; i += columns * 3) {
+    let line = ''
+    for (let j = i; j < i + columns * 3; j += 3) line += String.fromCodePoint(words[j] ?? 32)
+    lines.push(line.trimEnd())
+  }
+  return lines
+}
+
+test('desenha o painel em Raster no terminal', async ($, on) => {
   seed(on)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount(BAND)
+  const raster = await ui.find({ type: 'Raster' })
+  const lines = rasterText(String(raster?.props.cells), Number(raster?.props.columns))
+
+  expect(lines.length).toBe(5)
+  expect(lines[0]).toContain('25% · 1 de 4 fases · 2/3 planos')
+  expect(lines[2]).toContain('▶ 12  Consulta de dados')
+  expect(lines[2]).toContain('■□')
+  expect(lines[2]).toContain('Execução parcial (1/2)')
+  expect(lines[3]).toContain('Pronta para discussão')
+  expect(await ui.find({ type: 'Button', key: 'clear' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('mostra fases do milestone em progresso', async ($, on) => {
+  seed(on)
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount(DESKTOP)
 
   expect((await ui.find({ type: 'Text', text: /fases concluídas/ }))?.text).toContain('25% · 1 de 4')
   expect(await ui.find({ type: 'Text', text: /Execução parcial \(1\/2\)/ })).toBeTruthy()

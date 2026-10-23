@@ -7,6 +7,8 @@ export type PhaseRow = {
   p: Mark
   e: Mark
   status: string
+  plans: number
+  summaries: number
 }
 
 export type Board = {

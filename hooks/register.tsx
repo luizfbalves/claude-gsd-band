@@ -4,8 +4,9 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Board, Mark } from '../types'
 import { buildBoard, dirNumber, readMilestone, readPhases } from './board'
 import type { PhaseFiles } from './board'
+import { buildGrid } from './raster'
 
-const board = atom({ plugin: 'gsd-band', key: 'board' } as const, null, { shape: 'board-1' })
+const board = atom({ plugin: 'gsd-band', key: 'board' } as const, null, { shape: 'board-2' })
 const isHidden = atom({ plugin: 'gsd-band', key: 'isHidden' } as const, false)
 
 const GLYPH: Record<Mark, string> = { done: '✓', partial: '◆', ready: '○', blocked: '·' }
@@ -81,18 +82,34 @@ export const register: Register = on => {
     const isCompact = e.props.maxRows < data.rows.length + 4
     const rows = isCompact ? data.rows.filter(r => r.status !== 'Concluída').slice(0, 1) : data.rows
 
+    const header = (
+      <Box>
+        <Text dimColor>
+          GSD ► MANAGER · {data.version} {data.name}{' '}
+        </Text>
+        <Button
+          key="clear"
+          label="/clear"
+          onPress={() => $.command.run({ command: 'clear' }).catch(err => $.ui.toast(`/clear falhou: ${err}`))}
+        />
+      </Box>
+    )
+
+    if (e.surface === 'terminal') {
+      const { Raster } = $.ui.resolve(e)
+      const grid = buildGrid(data, e.props.bodyColumns, e.props.maxRows < data.rows.length + 3)
+
+      return (
+        <Box flexDirection="column" marginBottom={1}>
+          {header}
+          <Raster key="board" columns={grid.columns} rows={grid.rows} cells={grid.cells} />
+        </Box>
+      )
+    }
+
     return (
       <Box flexDirection="column" marginBottom={1}>
-        <Box>
-          <Text dimColor>
-            GSD ► MANAGER · {data.version} {data.name}{' '}
-          </Text>
-          <Button
-            key="clear"
-            label="/clear"
-            onPress={() => $.command.run({ command: 'clear' }).catch(err => $.ui.toast(`/clear falhou: ${err}`))}
-          />
-        </Box>
+        {header}
         <Box>
           <Text color="green">{'█'.repeat(filled)}</Text>
           <Text dimColor>{'░'.repeat(BAR - filled)}</Text>
