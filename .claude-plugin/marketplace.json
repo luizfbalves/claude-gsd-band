@@ -1,0 +1,5 @@
+{
+  "name": "claude-gsd-band",
+  "owner": { "name": "luizfbalves" },
+  "plugins": [{ "name": "gsd-band", "source": "./" }]
+}
