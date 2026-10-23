@@ -66,3 +66,18 @@ test('some sem milestone em progresso', async ($, on) => {
   expect((await ui.find({ type: 'Text' }))?.text).toBe('engine')
   await ui.unmount()
 })
+
+test('botão /clear roda o comando', async ($, on) => {
+  seed(on)
+  const runs: string[] = []
+  on('command.run', (_, e) => {
+    runs.push(e.command)
+    return { text: '' }
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(BAND)
+
+  await ui.press({ key: 'clear' })
+  expect(runs).toContain('clear')
+  await ui.unmount()
+})

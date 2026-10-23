@@ -75,7 +75,7 @@ export const register: Register = on => {
     const data = await read($, board)
     if (e.props.hasSurvey || data === null || (await read($, isHidden))) return next(e)
 
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
     const filled = Math.round((data.done / data.total) * BAR)
     const percent = Math.round((data.done / data.total) * 100)
     const isCompact = e.props.maxRows < data.rows.length + 4
@@ -83,9 +83,16 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" marginBottom={1}>
-        <Text dimColor>
-          GSD ► MANAGER · {data.version} {data.name}
-        </Text>
+        <Box>
+          <Text dimColor>
+            GSD ► MANAGER · {data.version} {data.name}{' '}
+          </Text>
+          <Button
+            key="clear"
+            label="/clear"
+            onPress={() => $.command.run({ command: 'clear' }).catch(err => $.ui.toast(`/clear falhou: ${err}`))}
+          />
+        </Box>
         <Box>
           <Text color="green">{'█'.repeat(filled)}</Text>
           <Text dimColor>{'░'.repeat(BAR - filled)}</Text>
