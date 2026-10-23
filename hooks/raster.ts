@@ -121,7 +121,7 @@ export const buildGrid = (board: Board, maxColumns: number, isCompact: boolean):
   ]
   const rows = isCompact ? board.rows.filter(r => r.status !== 'Concluída').slice(0, 1) : board.rows
   const active = board.rows.find(r => r.status !== 'Concluída')
-  const lines = [head, ...rows.map(r => phaseLine(r, r === active))]
+  const lines = [head, [], ...rows.map(r => phaseLine(r, r === active))]
   const columns = Math.max(1, Math.min(maxColumns, 512, Math.max(...lines.map(l => l.length))))
 
   return { columns, rows: lines.length, cells: encode(lines, columns) }

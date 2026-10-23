@@ -118,7 +118,7 @@ export const register: Register = on => {
     )
 
     if (Raster) {
-      const grid = buildGrid(data, e.props.bodyColumns, e.props.maxRows < data.rows.length + 4)
+      const grid = buildGrid(data, e.props.bodyColumns, e.props.maxRows < data.rows.length + 5)
 
       return (
         <Box flexDirection="column" marginBottom={1}>
