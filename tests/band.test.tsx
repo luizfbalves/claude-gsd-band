@@ -1,4 +1,5 @@
 import { expect, test } from 'claude-code/testing'
+import type { TestBody } from 'claude-code/testing'
 
 const STATE = `---
 milestone: v1.23
@@ -32,7 +33,7 @@ const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 30, bodyColumns: 100, scroll: { offset: 0, bodyRows: 30 }, view: {} },
 } as const
 
-const seed = (on: Parameters<Parameters<typeof test>[1]>[1], state = STATE) => {
+const seed = (on: Parameters<TestBody>[1], state = STATE) => {
   on('command.register', () => ({ value: { command: 'gsd-band' } }))
   on('clock.every', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -63,13 +64,16 @@ test('desenha o painel em Raster no terminal', async ($, on) => {
   const raster = await ui.find({ type: 'Raster', key: 'board' })
   const lines = rasterText(String(raster?.props.cells), Number(raster?.props.columns))
 
-  expect(lines.length).toBe(6)
-  expect(lines[0]).toContain('25% · 1 de 4 fases · 2/3 planos')
+  expect(lines.length).toBe(7)
+  expect(lines[0]).toContain('38% · 1 de 4 fases')
   expect(lines[1]).toBe('')
-  expect(lines[3]).toContain('▶ 12  Consulta de dados')
-  expect(lines[3]).toContain('■□')
-  expect(lines[3]).toContain('Execução parcial (1/2)')
-  expect(lines[4]).toContain('Pronta para discussão')
+  expect(lines[2]).toContain('D  P  E')
+  expect(lines[3]).toContain('1/1')
+  expect(lines[4]).toContain('▶ 12  Consulta de dados')
+  expect(lines[4]).toContain('■□')
+  expect(lines[4]).toContain('Execução parcial (1/2)')
+  expect(lines[5]).toContain('Pronta para discussão')
+  expect(lines[5]).not.toContain('□')
   expect(await ui.find({ type: 'Button', key: 'clear' })).toBeTruthy()
   const pulse = await ui.find({ type: 'Raster', key: 'pulse' })
   expect(rasterText(String(pulse?.props.cells), 2)[0]).toBe('⠾')
@@ -81,7 +85,7 @@ test('mostra fases do milestone em progresso', async ($, on) => {
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount(DESKTOP)
 
-  expect((await ui.find({ type: 'Text', text: /fases concluídas/ }))?.text).toContain('25% · 1 de 4')
+  expect((await ui.find({ type: 'Text', text: /fases concluídas/ }))?.text).toContain('38% · 1 de 4')
   expect(await ui.find({ type: 'Text', text: /Execução parcial \(1\/2\)/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /Pronta para discussão/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /Aguarda fase 13/ })).toBeTruthy()
@@ -114,5 +118,21 @@ test('botão /clear roda o comando', async ($, on) => {
 
   await ui.press({ key: 'clear' })
   expect(runs).toContain('clear')
+  await ui.unmount()
+})
+
+test('botão da próxima ação roda o comando GSD da fase ativa', async ($, on) => {
+  seed(on)
+  const runs: string[] = []
+  on('command.run', (_, e) => {
+    runs.push(`${e.command} ${e.args}`)
+    return { text: '' }
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(BAND)
+
+  expect((await ui.find({ type: 'Button', key: 'next' }))?.props.label).toBe('▶ /gsd-execute-phase 12')
+  await ui.press({ key: 'next' })
+  expect(runs).toContain('gsd-execute-phase 12')
   await ui.unmount()
 })

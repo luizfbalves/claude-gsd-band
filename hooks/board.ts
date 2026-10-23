@@ -78,3 +78,24 @@ export const buildBoard = (
     rows,
   }
 }
+
+/** Progresso do milestone: cada fase vale 1, a fase em execução conta a fração de planos com SUMMARY. */
+export const progress = (board: Board): number => {
+  const sum = board.rows.reduce((s, r) => {
+    if (r.status === 'Concluída') return s + 1
+    return r.plans > 0 ? s + Math.min(r.summaries, r.plans) / r.plans : s
+  }, 0)
+
+  return Math.round((sum / board.total) * 100)
+}
+
+/** O comando GSD que avança a primeira fase não concluída, ou null. */
+export const nextAction = (board: Board): { command: string; args: string } | null => {
+  const row = board.rows.find(r => r.status !== 'Concluída')
+  if (!row) return null
+  if (row.d === 'ready') return { command: 'gsd-discuss-phase', args: row.number }
+  if (row.p === 'ready') return { command: 'gsd-plan-phase', args: row.number }
+  if (row.e === 'ready' || row.e === 'partial') return { command: 'gsd-execute-phase', args: row.number }
+
+  return null
+}

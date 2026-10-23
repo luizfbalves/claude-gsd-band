@@ -3,15 +3,20 @@
 Um painel fixo acima do prompt do Claude Code que mostra em que ponto está o milestone GSD do projeto. São as mesmas informações do `/gsd-manager`, sem precisar rodar o comando.
 
 ```
-GSD ► MANAGER · v1.4 Checkout novo
-████████░░░░░░░░░░░░ 40% · 2 de 5 fases concluídas
-Fase  Descrição                     D  P  E  Status
-1     Carrinho persistente          ✓  ✓  ✓  Concluída
-2     Cálculo de frete              ✓  ✓  ✓  Concluída
-3     Pagamento com Pix             ✓  ✓  ◆  Execução parcial (4/9)
-4     Cupons no checkout            ○  ·  ·  Pronta para discussão
-5     Rollout gradual               ·  ·  ·  Aguarda fase 4
+────────────────────────────────────────────────────────────────────────────────
+⠾ GSD ► MANAGER · v1.23 Assistente do lojista [ /clear ] [ ▶ /gsd-execute-phase 12 ]
+████ ███ █████ ███████████████▎                  65% · 3 de 6 fases
+
+                                              D  P  E
+  9   Fundação do assistente na API           ▇▇ ▇▇ ▇▇  5/5                 Concluída
+  10  FAB e painel no console                 ▇▇ ▇▇ ▇▇  4/4                 Concluída
+  11  Catálogo de ajuda e contexto do lojista ▇▇ ▇▇ ▇▇  6/6                 Concluída
+▶ 12  Consulta de dados e diagnóstico         ▇▇ ▇▇ ▇▇  ■■■■■■■■■■■■■■■■■□□ Execução parcial (17/19)
+  13  Ações com confirmação                   ▇▇ ▇▇ ▇▇                      Pronta para discussão
+  14  Rollout no dev e em produção            ▇▇ ▇▇ ▇▇                      Aguarda fase 13
 ```
+
+No terminal os blocos `▇▇` são coloridos pelo estado de cada etapa.
 
 Em projetos sem milestone em andamento o painel não aparece e não ocupa espaço.
 
@@ -48,10 +53,13 @@ No app desktop, onde `/plugin` não funciona: clique em **+** ao lado do prompt,
 
 No terminal o painel é desenhado célula a célula (`Raster`):
 
-- a barra tem um segmento por fase, com largura proporcional ao número de planos e preenchimento com precisão de ⅛ de célula;
+- a barra tem um segmento por fase, com largura proporcional ao número de planos (fase ainda sem plano pesa a média das outras) e preenchimento com precisão de ⅛ de célula;
+- a porcentagem conta cada fase como 1 e a fase em execução pela fração de planos com SUMMARY;
 - D / P / E viram blocos coloridos: verde feito, amarelo em andamento, ciano pronto, cinza bloqueado;
-- cada plano da fase é um quadrado, `■` com SUMMARY e `□` sem;
-- `▶` marca a primeira fase não concluída.
+- na fase ativa, cada plano é um quadrado, `■` com SUMMARY e `□` sem; nas concluídas aparece só `n/n`;
+- `▶` marca a primeira fase não concluída;
+- a coluna de nome cresce com a largura do terminal;
+- o indicador antes de `GSD` gira rápido durante o turno e devagar parado.
 
 No app desktop, no VS Code e no celular continua a tabela em texto com as marcas acima.
 
@@ -75,11 +83,16 @@ Se o terminal tiver pouca altura, ele encolhe para o cabeçalho, a barra e a fas
 | Fases | lista `- [ ] **Phase N: Nome**` na seção `## Phases` do `ROADMAP.md`, ignorando o que está dentro de `<details>` |
 | D / P / E | arquivos em `.planning/phases/NN-nome/` |
 
-Nada é gravado no projeto, o mod só lê esses arquivos. Ele relê tudo ao abrir a sessão, ao fim de cada turno e a cada 15 segundos.
+Nada é gravado no projeto, o mod só lê esses arquivos. Ele relê tudo ao abrir a sessão, ao fim de cada turno, logo depois de uma ferramenta mexer em `.planning/` e a cada 15 segundos.
 
 ## Comando
 
 `/gsd-band` esconde ou mostra o painel na sessão atual.
+
+## Botões
+
+- **`/clear`** limpa a conversa.
+- **`▶ /gsd-…`** roda o próximo comando GSD da primeira fase não concluída: `gsd-discuss-phase`, `gsd-plan-phase` ou `gsd-execute-phase`, com o número da fase.
 
 ## Desenvolvimento
 

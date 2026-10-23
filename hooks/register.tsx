@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Mark } from '../types'
-import { buildBoard, dirNumber, readMilestone, readPhases } from './board'
+import { buildBoard, dirNumber, nextAction, progress, readMilestone, readPhases } from './board'
 import type { PhaseFiles } from './board'
 import { buildGrid, pulseCells } from './raster'
 
@@ -75,6 +75,14 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // Atualiza na hora quando uma ferramenta mexe nos arquivos do GSD, sem esperar o timer.
+  on('tool.call', async ($, e, next) => {
+    const result = await next(e)
+    if (JSON.stringify(e).includes('.planning')) void refresh($)
+
+    return result
+  })
+
   on('command.run', { command: 'gsd-band' }, async $ => {
     const hidden = await update($, isHidden, v => !v)
     await refresh($)
@@ -90,8 +98,9 @@ export const register: Register = on => {
     }
 
     const { Box, Button, Text } = $.ui.resolve(e)
-    const filled = Math.round((data.done / data.total) * BAR)
-    const percent = Math.round((data.done / data.total) * 100)
+    const percent = progress(data)
+    const filled = Math.round((percent / 100) * BAR)
+    const action = nextAction(data)
     const isCompact = e.props.maxRows < data.rows.length + 5
     const rows = isCompact ? data.rows.filter(r => r.status !== 'Concluída').slice(0, 1) : data.rows
 
@@ -113,12 +122,22 @@ export const register: Register = on => {
             label="/clear"
             onPress={() => $.command.run({ command: 'clear' }).catch(err => $.ui.toast(`/clear falhou: ${err}`))}
           />
+          {action && <Text> </Text>}
+          {action && (
+            <Button
+              key="next"
+              label={`▶ /${action.command} ${action.args}`}
+              onPress={() =>
+                $.command.run(action).catch(err => $.ui.toast(`/${action.command} falhou: ${err}`))
+              }
+            />
+          )}
         </Box>
       </Box>
     )
 
     if (Raster) {
-      const grid = buildGrid(data, e.props.bodyColumns, e.props.maxRows < data.rows.length + 5)
+      const grid = buildGrid(data, e.props.bodyColumns, e.props.maxRows < data.rows.length + 6)
 
       return (
         <Box flexDirection="column" marginBottom={1}>
