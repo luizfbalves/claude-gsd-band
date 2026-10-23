@@ -96,6 +96,17 @@ const encode = (lines: Cell[][], columns: number): string => {
   return btoa(binary)
 }
 
+const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+
+/** Indicador de vida, 2 colunas: gira durante o turno, pulsa devagar parado. */
+export const pulseCells = (frame: number, isWorking: boolean): string => {
+  const cell: Cell = isWorking
+    ? { ch: SPIN[frame % SPIN.length] ?? '⠋', fg: YELLOW, bg: DEFAULT }
+    : { ch: '●', fg: Math.floor(frame / 8) % 2 ? GREEN : 0x1f5c2a, bg: DEFAULT }
+
+  return encode([[cell, ...text(' ')]], 2)
+}
+
 /** As linhas do painel em células: barra, e uma linha por fase (só a ativa quando compacto). */
 export const buildGrid = (board: Board, maxColumns: number, isCompact: boolean): Grid => {
   const percent = Math.round((board.done / board.total) * 100)

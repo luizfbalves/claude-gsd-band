@@ -4,13 +4,18 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Board, Mark } from '../types'
 import { buildBoard, dirNumber, readMilestone, readPhases } from './board'
 import type { PhaseFiles } from './board'
-import { buildGrid } from './raster'
+import { buildGrid, pulseCells } from './raster'
 
 const board = atom({ plugin: 'gsd-band', key: 'board' } as const, null, { shape: 'board-2' })
 const isHidden = atom({ plugin: 'gsd-band', key: 'isHidden' } as const, false)
 
 const GLYPH: Record<Mark, string> = { done: '✓', partial: '◆', ready: '○', blocked: '·' }
 const BAR = 20
+const TICK = 100
+
+// Onde o indicador está montado agora; o render atualiza, o timer só repinta.
+let pulse: { requestId: string; isWorking: boolean } | null = null
+let frame = 0
 
 const readFiles = async ($: EngineInterface, root: string): Promise<Map<number, PhaseFiles>> => {
   const files = new Map<number, PhaseFiles>()
@@ -55,6 +60,11 @@ export const register: Register = on => {
     await $.command.register({ name: 'gsd-band', description: 'Mostra ou esconde o painel GSD acima do prompt' })
     await refresh($)
     $.clock.every(15000, () => refresh($))
+    $.clock.every(TICK, () => {
+      if (!pulse) return
+      frame++
+      void $.ui.blit({ requestId: pulse.requestId, key: 'pulse', cells: pulseCells(frame, pulse.isWorking) }).catch(() => undefined)
+    })
 
     return next(e)
   })
@@ -74,7 +84,10 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const data = await read($, board)
-    if (e.props.hasSurvey || data === null || (await read($, isHidden))) return next(e)
+    if (e.props.hasSurvey || data === null || (await read($, isHidden))) {
+      pulse = null
+      return next(e)
+    }
 
     const { Box, Button, Text } = $.ui.resolve(e)
     const filled = Math.round((data.done / data.total) * BAR)
@@ -82,10 +95,16 @@ export const register: Register = on => {
     const isCompact = e.props.maxRows < data.rows.length + 5
     const rows = isCompact ? data.rows.filter(r => r.status !== 'Concluída').slice(0, 1) : data.rows
 
+    const elements = $.ui.resolve(e)
+    const Raster = e.surface === 'terminal' && 'Raster' in elements ? elements.Raster : undefined
+    const isTerminal = Raster !== undefined
+    pulse = isTerminal ? { requestId: e.requestId, isWorking: e.props.isWorking } : null
+
     const header = (
       <Box flexDirection="column">
         <Text dimColor>{'─'.repeat(Math.max(1, e.props.bodyColumns))}</Text>
         <Box>
+          {Raster && <Raster key="pulse" columns={2} rows={1} cells={pulseCells(frame, e.props.isWorking)} />}
           <Text dimColor>
             GSD ► MANAGER · {data.version} {data.name}{' '}
           </Text>
@@ -98,8 +117,7 @@ export const register: Register = on => {
       </Box>
     )
 
-    if (e.surface === 'terminal') {
-      const { Raster } = $.ui.resolve(e)
+    if (Raster) {
       const grid = buildGrid(data, e.props.bodyColumns, e.props.maxRows < data.rows.length + 4)
 
       return (

@@ -60,7 +60,7 @@ test('desenha o painel em Raster no terminal', async ($, on) => {
   seed(on)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount(BAND)
-  const raster = await ui.find({ type: 'Raster' })
+  const raster = await ui.find({ type: 'Raster', key: 'board' })
   const lines = rasterText(String(raster?.props.cells), Number(raster?.props.columns))
 
   expect(lines.length).toBe(5)
@@ -70,6 +70,8 @@ test('desenha o painel em Raster no terminal', async ($, on) => {
   expect(lines[2]).toContain('Execução parcial (1/2)')
   expect(lines[3]).toContain('Pronta para discussão')
   expect(await ui.find({ type: 'Button', key: 'clear' })).toBeTruthy()
+  const pulse = await ui.find({ type: 'Raster', key: 'pulse' })
+  expect(rasterText(String(pulse?.props.cells), 2)[0]).toBe('●')
   await ui.unmount()
 })
 
