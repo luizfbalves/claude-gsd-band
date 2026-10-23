@@ -97,12 +97,14 @@ const encode = (lines: Cell[][], columns: number): string => {
 }
 
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+// Os 6 pontos acesos com uma falha girando no sentido horário: 1 → 4 → 5 → 6 → 3 → 2.
+const ORBIT = ['⠾', '⠷', '⠯', '⠟', '⠻', '⠽']
 
-/** Indicador de vida, 2 colunas: gira durante o turno, pulsa devagar parado. */
+/** Indicador de vida, 2 colunas: gira rápido durante o turno, devagar parado. */
 export const pulseCells = (frame: number, isWorking: boolean): string => {
   const cell: Cell = isWorking
     ? { ch: SPIN[frame % SPIN.length] ?? '⠋', fg: YELLOW, bg: DEFAULT }
-    : { ch: '⠶', fg: Math.floor(frame / 8) % 2 ? GREEN : 0x1f5c2a, bg: DEFAULT }
+    : { ch: ORBIT[Math.floor(frame / 3) % ORBIT.length] ?? '⠾', fg: GREEN, bg: DEFAULT }
 
   return encode([[cell, ...text(' ')]], 2)
 }

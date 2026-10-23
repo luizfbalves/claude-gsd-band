@@ -71,7 +71,7 @@ test('desenha o painel em Raster no terminal', async ($, on) => {
   expect(lines[3]).toContain('Pronta para discussão')
   expect(await ui.find({ type: 'Button', key: 'clear' })).toBeTruthy()
   const pulse = await ui.find({ type: 'Raster', key: 'pulse' })
-  expect(rasterText(String(pulse?.props.cells), 2)[0]).toBe('⠶')
+  expect(rasterText(String(pulse?.props.cells), 2)[0]).toBe('⠾')
   await ui.unmount()
 })
 
