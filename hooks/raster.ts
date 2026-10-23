@@ -102,7 +102,7 @@ const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '�
 export const pulseCells = (frame: number, isWorking: boolean): string => {
   const cell: Cell = isWorking
     ? { ch: SPIN[frame % SPIN.length] ?? '⠋', fg: YELLOW, bg: DEFAULT }
-    : { ch: '●', fg: Math.floor(frame / 8) % 2 ? GREEN : 0x1f5c2a, bg: DEFAULT }
+    : { ch: '⠶', fg: Math.floor(frame / 8) % 2 ? GREEN : 0x1f5c2a, bg: DEFAULT }
 
   return encode([[cell, ...text(' ')]], 2)
 }
