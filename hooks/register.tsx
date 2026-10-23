@@ -104,7 +104,7 @@ export const register: Register = on => {
         {!isCompact && (
           <Box>
             <Box width={6}><Text bold color="yellow">Fase</Text></Box>
-            <Box width={30}><Text bold color="yellow">Descrição</Text></Box>
+            <Box width={30} marginRight={1}><Text bold color="yellow">Descrição</Text></Box>
             <Box width={3}><Text bold color="yellow">D</Text></Box>
             <Box width={3}><Text bold color="yellow">P</Text></Box>
             <Box width={3}><Text bold color="yellow">E</Text></Box>
@@ -114,7 +114,7 @@ export const register: Register = on => {
         {rows.map(row => (
           <Box key={row.number}>
             <Box width={6}><Text>{row.number}</Text></Box>
-            <Box width={30}><Text wrap="truncate-end">{row.name}</Text></Box>
+            <Box width={30} marginRight={1}><Text wrap="truncate-end">{row.name}</Text></Box>
             {[row.d, row.p, row.e].map((mark, i) => (
               <Box key={`m${i}`} width={3}><Text color={markColor(mark)} dimColor={mark === 'blocked'}>{GLYPH[mark]}</Text></Box>
             ))}
