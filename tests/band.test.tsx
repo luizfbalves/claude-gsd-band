@@ -235,3 +235,74 @@ test('mostra o comando GSD em andamento e segue a workstream dele', async ($, on
   expect((await ui.find({ type: 'Text', text: /◆/ }))?.text).toBe('◆ Executando fase 12 · gsd-executor: Running orders specs')
   await ui.unmount()
 })
+
+test('/gsd-band web sobe a página local e manda o estado com token', async ($, on) => {
+  seed(on)
+  on('session.id', () => ({ value: 'abc-123' }))
+  on('env.get', () => ({ value: undefined }))
+  on('agent.list', () => ({ value: [] }))
+  const posts: { url: string; token: unknown; body: string }[] = []
+  let posted = () => {}
+  const sent = new Promise<void>(resolve => { posted = resolve })
+  const argv: string[][] = []
+  on('process.spawn', async function* (_, e) {
+    argv.push([...e.argv])
+    yield { stream: 'stdout' as const, text: 'PORT 4555\n' }
+    await sent
+    return { value: { code: 0, signal: null } }
+  })
+  on('http.fetch', (_, e) => {
+    posts.push({ url: e.url, token: (e.init?.headers as Record<string, string>)['x-gsd-band-token'], body: String(e.init?.body) })
+    posted()
+    return { value: { status: 204, ok: true, headers: {}, text: '' } }
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const { text } = await run($, 'gsd-band', 'web')
+  expect(text).toContain('http://127.0.0.1:4555')
+  expect(argv[0]?.slice(0, 2)).toEqual(['node', '-e'])
+  expect(posts[0]?.url).toBe('http://127.0.0.1:4555/state')
+  expect(typeof posts[0]?.token).toBe('string')
+  const state = JSON.parse(posts[0]?.body ?? '{}')
+  expect(state.boards[0].percent).toBe(38)
+  expect(state.boards[0].rows[1].planList).toEqual([{ id: '12-01', isDone: true }, { id: '12-02', isDone: false }])
+})
+
+test('coluna V e pendências vêm do VERIFICATION.md e do UAT.md', async ($, on) => {
+  on('command.register', () => ({ value: { command: 'gsd-band' } }))
+  on('clock.every', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.cwd', () => ({ value: '/' }))
+  const lists: Record<string, ReturnType<typeof entry>[]> = {
+    '/.planning/phases': [entry('09-fundacao', 'dir'), entry('12-consulta', 'dir')],
+    '/.planning/phases/09-fundacao': [entry('09-01-PLAN.md'), entry('09-01-SUMMARY.md'), entry('09-UAT.md'), entry('09-VERIFICATION.md')],
+    '/.planning/phases/12-consulta': [entry('12-01-PLAN.md')],
+  }
+  on('fs.list', (_, e) => ({ value: lists[e.path ?? ''] ?? [] }))
+  on('fs.read', (_, e) => {
+    if (e.path.endsWith('09-UAT.md')) return { value: '---\nstatus: testing\n---\n## Summary\n\npending: 3\n' }
+    if (e.path.endsWith('09-VERIFICATION.md')) return { value: '---\nstatus: passed\n---\n' }
+    return { value: e.path.endsWith('STATE.md') ? STATE : ROADMAP }
+  })
+  on('session.id', () => ({ value: 'abc-123' }))
+  on('env.get', () => ({ value: undefined }))
+  on('agent.list', () => ({ value: [] }))
+  const bodies: string[] = []
+  on('process.spawn', async function* () {
+    yield { stream: 'stdout' as const, text: 'PORT 4555\n' }
+    await new Promise<void>(() => {})
+    return { value: { code: 0, signal: null } }
+  })
+  on('http.fetch', (_, e) => {
+    bodies.push(String(e.init?.body))
+    return { value: { status: 204, ok: true, headers: {}, text: '' } }
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await run($, 'gsd-band', 'web')
+
+  const board = JSON.parse(bodies.at(-1) ?? '{}').boards[0]
+  expect(board.rows[0].v).toBe('partial')
+  expect(board.rows[0].uatPending).toBe(3)
+  expect(board.rows[1].v).toBe('blocked')
+  expect(board.pendencies).toEqual(['UAT da fase 9 com 3 itens'])
+})

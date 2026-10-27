@@ -1,23 +1,43 @@
-import type { Activity, Board, PhaseRow } from '../types'
+import type { Activity, Board, Mark, PhaseRow } from '../types'
 
-export type PhaseFiles = { hasContext: boolean; plans: number; summaries: number }
+export type PhaseFiles = {
+  hasContext: boolean
+  plans: number
+  summaries: number
+  /** Prefixos dos planos ("24-01") e dos SUMMARY. */
+  planIds?: string[]
+  summaryIds?: string[]
+  /** `status` do VERIFICATION.md, se houver. */
+  verification?: string
+  /** UAT.md: `status` e `pending` da seção Summary. */
+  uat?: { status: string; pending: number }
+}
 
-type Milestone = { workstream: string | null; version: string; name: string }
+type Milestone = { workstream: string | null; version: string; name: string; stoppedAt: string; lastUpdated: string }
 
 const CLOSED = /complete|archived|shipped|closed/i
 
-const field = (text: string, key: string): string | undefined =>
-  text.match(new RegExp(`^${key}:\\s*"?([^"\\n]*)"?\\s*$`, 'm'))?.[1]?.trim()
+export const field = (text: string, key: string): string | undefined =>
+  text.match(new RegExp(`^${key}:\\s*(.*)$`, 'm'))?.[1]?.trim().replace(/^(["'])(.*)\1$/, '$2')
+
+/** O frontmatter entre `---`, ou ''. */
+export const frontmatter = (md: string): string => md.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? ''
 
 /** Milestone em progresso pelo frontmatter do STATE.md, ou null. */
 export const readMilestone = (stateMd: string, workstream: string | null = null): Milestone | null => {
-  const front = stateMd.match(/^---\n([\s\S]*?)\n---/)?.[1]
+  const front = frontmatter(stateMd)
   if (!front) return null
   const version = field(front, 'milestone')
   const status = field(front, 'status') ?? ''
   if (!version || CLOSED.test(status)) return null
 
-  return { workstream, version, name: field(front, 'milestone_name') ?? '' }
+  return {
+    workstream,
+    version,
+    name: field(front, 'milestone_name') ?? '',
+    stoppedAt: field(front, 'stopped_at') ?? '',
+    lastUpdated: field(front, 'last_updated') ?? '',
+  }
 }
 
 /** Fases do milestone atual: a lista da seção "## Phases" (ou "## Fases") fora de <details>. */
@@ -42,6 +62,27 @@ export const dirNumber = (dir: string): number | undefined => {
   return prefix === undefined ? undefined : Number(prefix)
 }
 
+const PASSED = /^(passed|passed_with_override)$/
+const UAT_CLOSED = /^(complete|resolved|passed|closed_without_execution)$/
+
+const isUatOpen = (uat: PhaseFiles['uat']): boolean => !!uat && !UAT_CLOSED.test(uat.status) && uat.pending > 0
+
+/** V: verde com VERIFICATION aprovado e UAT fechado, amarelo com pendência, ciano executada sem verificação. */
+const verifyMark = (f: PhaseFiles, isExecuted: boolean): Mark => {
+  if (isUatOpen(f.uat) || (f.verification && !PASSED.test(f.verification))) return 'partial'
+  if (f.verification) return 'done'
+
+  return isExecuted ? 'ready' : 'blocked'
+}
+
+/** O que espera por você no milestone: UAT aberto e verificação com pendência. */
+export const pendencies = (board: Board): string[] =>
+  board.rows.flatMap(r => {
+    if (r.uatPending > 0) return [`UAT da fase ${r.number} com ${r.uatPending} ${r.uatPending === 1 ? 'item' : 'itens'}`]
+    if (r.v === 'partial') return [`Verificação da fase ${r.number} com pendência`]
+    return []
+  })
+
 export const buildBoard = (
   milestone: Milestone,
   phases: ReturnType<typeof readPhases>,
@@ -50,8 +91,18 @@ export const buildBoard = (
   let isReadyTaken = false
   const rows: PhaseRow[] = phases.map((phase, i) => {
     const f = files.get(Number(phase.number)) ?? { hasContext: false, plans: 0, summaries: 0 }
-    const base = { number: phase.number, name: phase.name, plans: f.plans, summaries: f.summaries }
-    if (phase.isChecked || (f.plans > 0 && f.summaries >= f.plans)) {
+    const isExecuted = phase.isChecked || (f.plans > 0 && f.summaries >= f.plans)
+    const summaryIds = new Set(f.summaryIds ?? [])
+    const base = {
+      number: phase.number,
+      name: phase.name,
+      plans: f.plans,
+      summaries: f.summaries,
+      v: verifyMark(f, isExecuted),
+      uatPending: isUatOpen(f.uat) ? (f.uat?.pending ?? 0) : 0,
+      planList: (f.planIds ?? []).map(id => ({ id, isDone: summaryIds.has(id) })),
+    }
+    if (isExecuted) {
       return { ...base, d: 'done', p: 'done', e: 'done', status: 'Concluída' }
     }
     if (f.plans > 0) {

@@ -2,24 +2,31 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Activity, Board, Mark } from '../types'
-import { actionLabel, buildBoard, describeActivity, dirNumber, nextAction, parseGsd, pickBoard, progress, readMilestone, readPhases, touchedWorkstream } from './board'
+import { actionLabel, buildBoard, describeActivity, dirNumber, field, frontmatter, nextAction, parseGsd, pendencies, pickBoard, progress, readMilestone, readPhases, touchedWorkstream } from './board'
 import type { PhaseFiles } from './board'
 import { buildGrid, pulseCells } from './raster'
+import { SERVER } from './web'
 
-const board = atom({ plugin: 'gsd-band', key: 'board' } as const, null, { shape: 'board-3' })
+const board = atom({ plugin: 'gsd-band', key: 'board' } as const, null, { shape: 'board-4' })
 const isHidden = atom({ plugin: 'gsd-band', key: 'isHidden' } as const, false)
 const choices = atom({ plugin: 'gsd-band', key: 'choices' } as const, [])
 const selected = atom({ plugin: 'gsd-band', key: 'selected' } as const, null)
 const hint = atom({ plugin: 'gsd-band', key: 'hint' } as const, null)
-const activity = atom({ plugin: 'gsd-band', key: 'activity' } as const, null)
+const activity = atom({ plugin: 'gsd-band', key: 'activity' } as const, null, { shape: 'activity-2' })
 
 const GLYPH: Record<Mark, string> = { done: '✓', partial: '◆', ready: '○', blocked: '·' }
 const BAR = 20
 const TICK = 100
+const PORT = 4317
 
 // Onde o indicador está montado agora; o render atualiza, o timer só repinta.
 let pulse: { requestId: string; isWorking: boolean } | null = null
 let frame = 0
+
+// A página local: o servidor rodando, os milestones da última leitura e quando cada subagente apareceu.
+let web: { url: string; token: string; stream: AsyncGenerator<unknown, unknown> } | null = null
+let lastBoards: Board[] = []
+const seen = new Map<string, number>()
 
 const readFiles = async ($: EngineInterface, root: string): Promise<Map<number, PhaseFiles>> => {
   const files = new Map<number, PhaseFiles>()
@@ -27,11 +34,27 @@ const readFiles = async ($: EngineInterface, root: string): Promise<Map<number, 
   for (const dir of dirs) {
     const number = dirNumber(dir.name)
     if (dir.kind !== 'dir' || number === undefined) continue
-    const names = (await $.fs.list(`${root}/phases/${dir.name}`).catch(() => [])).map(f => f.name)
+    const path = `${root}/phases/${dir.name}`
+    const names = (await $.fs.list(path).catch(() => [])).map(f => f.name)
+    const ids = (suffix: string) => names.filter(n => n.endsWith(suffix)).map(n => n.slice(0, -suffix.length)).sort()
+    const read = async (suffix: string) => {
+      const name = names.find(n => n.endsWith(suffix))
+      return name ? await $.fs.read(`${path}/${name}`).catch(() => '') : ''
+    }
+    const verification = field(frontmatter(await read('-VERIFICATION.md')), 'status')
+    const uatMd = await read('-UAT.md')
+    const planIds = ids('-PLAN.md')
+    const summaryIds = ids('-SUMMARY.md')
     files.set(number, {
       hasContext: names.some(n => n.endsWith('-CONTEXT.md')),
-      plans: names.filter(n => n.endsWith('-PLAN.md')).length,
-      summaries: names.filter(n => n.endsWith('-SUMMARY.md')).length,
+      plans: planIds.length,
+      summaries: summaryIds.length,
+      planIds,
+      summaryIds,
+      verification,
+      uat: uatMd
+        ? { status: field(frontmatter(uatMd), 'status') ?? '', pending: Number(uatMd.match(/^pending:\s*(\d+)/m)?.[1] ?? 0) }
+        : undefined,
     })
   }
 
@@ -93,11 +116,66 @@ const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.str
 const refreshActivity = async ($: EngineInterface, command?: Pick<Activity, 'command' | 'phase'> | null): Promise<void> => {
   const agents = (await $.agent.list().catch(() => []))
     .filter(a => a.type.startsWith('gsd-') && (a.status === 'running' || a.status === 'pending'))
-    .map(a => ({ type: a.type, description: a.description }))
+  for (const id of seen.keys()) if (!agents.some(a => a.id === id)) seen.delete(id)
+  for (const a of agents) if (!seen.has(a.id)) seen.set(a.id, Date.now())
+  const running = agents.map(a => ({ type: a.type, description: a.description, since: seen.get(a.id) ?? Date.now() }))
   const before = await read($, activity)
   const base = command === undefined ? { command: before?.command ?? null, phase: before?.phase ?? null } : command ?? { command: null, phase: null }
-  const next: Activity | null = base.command || agents.length > 0 ? { ...base, agents } : null
+  const next: Activity | null = base.command || running.length > 0 ? { ...base, agents: running } : null
   if (!same(before, next)) await update($, activity, () => next)
+  await publishWeb($)
+}
+
+/** Manda o estado para a página local, se ela estiver ligada. */
+const publishWeb = async ($: EngineInterface): Promise<void> => {
+  if (!web) return
+  const body = JSON.stringify({
+    project: await $.session.cwd(),
+    session: await $.session.id(),
+    selected: (await read($, board))?.workstream ?? '',
+    activity: await read($, activity),
+    boards: lastBoards.map(b => ({ ...b, id: b.workstream ?? '', percent: progress(b), pendencies: pendencies(b) })),
+  })
+  await $.http
+    .fetch(`${web.url}/state`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-gsd-band-token': web.token }, body })
+    .catch(() => undefined)
+}
+
+/** Sobe o servidor com um runtime e resolve com a URL quando ele avisa a porta. */
+const spawnServer = ($: EngineInterface, runtime: string, token: string) =>
+  new Promise<NonNullable<typeof web>>((resolve, reject) => {
+    const stream = $.process.spawn({ argv: [runtime, '-e', SERVER], env: { GSD_BAND_TOKEN: token, GSD_BAND_PORT: String(PORT) } })
+    void (async () => {
+      let isUp = false
+      try {
+        for await (const { text } of stream) {
+          const port = isUp ? undefined : text.match(/PORT (\d+)/)?.[1]
+          if (port) {
+            isUp = true
+            resolve({ url: `http://127.0.0.1:${port}`, token, stream })
+          }
+        }
+      } catch (err) {
+        if (!isUp) reject(err)
+      }
+      if (!isUp) reject(new Error(`${runtime} encerrou antes de abrir a porta`))
+      else if (web?.stream === stream) web = null
+    })()
+  })
+
+const startWeb = async ($: EngineInterface): Promise<string> => {
+  const token = crypto.randomUUID()
+  const errors: string[] = []
+  for (const runtime of ['node', 'bun']) {
+    try {
+      web = await spawnServer($, runtime, token)
+      await publishWeb($)
+      return web.url
+    } catch (err) {
+      errors.push(`${runtime}: ${err instanceof Error ? err.message : err}`)
+    }
+  }
+  throw new Error(errors.join('; '))
 }
 
 /** Registra um comando ou skill GSD: o que está rodando e em qual workstream. */
@@ -111,6 +189,7 @@ const noteGsd = async ($: EngineInterface, command: string, args?: string): Prom
 const refresh = async ($: EngineInterface): Promise<void> => {
   const planning = `${(await $.session.cwd()).replace(/\/$/, '')}/.planning`
   const boards = await loadBoards($, planning)
+  lastBoards = boards
   const active = await readActive($, planning)
   const next = pickBoard(boards, await read($, selected), await read($, hint), active)
   const ids = boards.map(b => b.workstream ?? '')
@@ -128,8 +207,8 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'gsd-band',
-      description: 'Mostra ou esconde o painel GSD; com um nome, escolhe a workstream monitorada',
-      argumentHint: '[workstream]',
+      description: 'Mostra ou esconde o painel GSD; com um nome, escolhe a workstream; web liga a página local',
+      argumentHint: '[workstream | web]',
     })
     await refresh($)
     $.clock.every(15000, () => refresh($))
@@ -172,6 +251,19 @@ export const register: Register = on => {
 
   on('command.run', { command: 'gsd-band' }, async ($, e) => {
     const name = e.args.trim()
+    if (name === 'web') {
+      if (web) {
+        await web.stream.return(undefined)
+        web = null
+        return { text: 'Página do painel desligada.' }
+      }
+      await refresh($)
+      const url = await startWeb($).catch((err: Error) => {
+        void $.ui.toast(`Página do painel não subiu: ${err.message}`)
+        return null
+      })
+      return { text: url ? `Página do painel em ${url} (só leitura). /gsd-band web desliga.` : 'Página do painel não subiu: precisa de node ou bun no PATH.' }
+    }
     if (name) {
       await refresh($)
       const ids = await read($, choices)

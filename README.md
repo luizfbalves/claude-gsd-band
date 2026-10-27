@@ -92,11 +92,24 @@ Se o terminal tiver pouca altura, ele encolhe para o cabeçalho, a barra e a fas
 | Fases | lista `- [ ] **Phase N: Nome**` na seção `## Phases` (ou `## Fases`) do `ROADMAP.md`, ignorando o que está dentro de `<details>` |
 | D / P / E | arquivos em `.planning/phases/NN-nome/` |
 
-Nada é gravado no projeto, o mod só lê esses arquivos. Ele relê tudo ao abrir a sessão, ao fim de cada turno, logo depois de uma ferramenta mexer em `.planning/` e a cada 15 segundos.
+Nada é gravado no projeto, o mod só lê esses arquivos (e `*-VERIFICATION.md` / `*-UAT.md` para a coluna V da página). Ele relê tudo ao abrir a sessão, ao fim de cada turno, logo depois de uma ferramenta mexer em `.planning/` e a cada 15 segundos.
+
+## Página web
+
+`/gsd-band web` abre uma página local com o mesmo painel e mais detalhes, para acompanhar no navegador:
+
+- abas para cada workstream com milestone em progresso;
+- a tabela de fases com D / P / E / V e a grade de planos da fase ativa;
+- o que está rodando agora, com o tempo de cada subagente `gsd-*`;
+- pendências (UAT aberto, verificação com pendência) e o último `stopped_at` do STATE.md.
+
+A coluna **V** sai do `*-VERIFICATION.md` e do `*-UAT.md` da fase: verde aprovada, amarelo com pendência, ciano executada sem verificação, cinza ainda não.
+
+A página roda num servidor Node (ou Bun, se não houver Node) que o mod sobe em `http://127.0.0.1:4317`, ou em outra porta se essa estiver ocupada. Ela é só leitura e atualiza sozinha. O servidor só atende `127.0.0.1`/`localhost`, só aceita estado do mod (com um token gerado a cada vez) e encerra junto com a sessão. `/gsd-band web` de novo desliga.
 
 ## Comando
 
-`/gsd-band` esconde ou mostra o painel na sessão atual. `/gsd-band <nome>` escolhe a workstream monitorada.
+`/gsd-band` esconde ou mostra o painel na sessão atual. `/gsd-band <nome>` escolhe a workstream monitorada. `/gsd-band web` liga ou desliga a página local.
 
 ## Botões
 
@@ -110,6 +123,7 @@ Nada é gravado no projeto, o mod só lê esses arquivos. Ele relê tudo ao abri
 hooks/board.ts       leitura do STATE.md e do ROADMAP.md, montagem das linhas
 hooks/register.tsx   eventos, atualização e desenho do painel
 hooks/raster.ts      células do painel no terminal
+hooks/web.ts         servidor e página local
 types/index.d.ts     contrato do estado do mod
 tests/               testes com dados de exemplo
 ```
