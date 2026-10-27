@@ -59,10 +59,36 @@ const loadBoards = async ($: EngineInterface, planning: string): Promise<Board[]
   return boards.filter((b): b is Board => b !== null)
 }
 
+const token = (raw: string): string => raw.trim().replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 160)
+
+/** Workstream ativa como o GSD resolve: o ponteiro desta sessão, senão `.planning/active-workstream`. */
+const readActive = async ($: EngineInterface, planning: string): Promise<string> => {
+  const own = await readSessionPointer($, planning).catch(() => '')
+
+  return own || (await $.fs.read(`${planning}/active-workstream`).catch(() => '')).trim()
+}
+
+/** Ponteiro em `$TMPDIR/gsd-workstream-sessions/<sha1(.planning)[0:16]>/<chave da sessão>`. */
+const readSessionPointer = async ($: EngineInterface, planning: string): Promise<string> => {
+  const gsdKey = await $.env.get('GSD_SESSION_KEY')
+  const claudeKey = await $.env.get('CLAUDE_SESSION_ID')
+  const sessionKey = gsdKey
+    ? `gsd-session-key-${token(gsdKey)}`
+    : claudeKey
+      ? `claude-session-id-${token(claudeKey)}`
+      : `claude-code-session-id-${token(await $.session.id())}`
+  const real = (await $.fs.stat(planning, { resolve: true }).catch(() => undefined))?.realPath ?? planning
+  const hash = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(real))
+  const projectId = [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
+  const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/$/, '')
+
+  return (await $.fs.read(`${tmp}/gsd-workstream-sessions/${projectId}/${sessionKey}`)).trim()
+}
+
 const refresh = async ($: EngineInterface): Promise<void> => {
   const planning = `${(await $.session.cwd()).replace(/\/$/, '')}/.planning`
   const boards = await loadBoards($, planning)
-  const active = (await $.fs.read(`${planning}/active-workstream`).catch(() => '')).trim()
+  const active = await readActive($, planning)
   const next = pickBoard(boards, await read($, selected), active)
   const ids = boards.map(b => b.workstream ?? '')
   if (JSON.stringify(await read($, choices)) !== JSON.stringify(ids)) await update($, choices, () => ids)

@@ -139,13 +139,17 @@ test('botão da próxima ação roda o comando GSD da fase ativa', async ($, on)
 
 const WS_STATE = (version: string) => STATE.replace('v1.23', version).replace('Milestone de exemplo', `Milestone ${version}`)
 
-const seedWorkstreams = (on: Parameters<TestBody>[1], active = '') => {
+const seedWorkstreams = (on: Parameters<TestBody>[1], active = '', session = '') => {
+  on('session.id', () => ({ value: 'abc-123' }))
+  on('env.get', (_, e) => ({ value: e.name === 'TMPDIR' ? '/tmp/' : undefined }))
+  on('fs.stat', () => ({ value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, realPath: '/.planning' } }))
   on('command.register', () => ({ value: { command: 'gsd-band' } }))
   on('clock.every', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.cwd', () => ({ value: '/' }))
   on('fs.read', (_, e) => {
     if (e.path === '/.planning/active-workstream') return { value: active }
+    if (e.path === '/tmp/gsd-workstream-sessions/d4c4d48d0315d66c/claude-code-session-id-abc-123' && session) return { value: `${session}\n` }
     if (e.path === '/.planning/workstreams/alfa/STATE.md') return { value: WS_STATE('v2.0') }
     if (e.path === '/.planning/workstreams/beta/STATE.md') return { value: WS_STATE('v3.0') }
     if (e.path === '/.planning/workstreams/gama/STATE.md') return { value: WS_STATE('v4.0').replace('executing', 'milestone-complete') }
@@ -188,6 +192,15 @@ test('/gsd-band <nome> escolhe a workstream', async ($, on) => {
 
   expect((await $.command.run({ command: 'gsd-band', args: 'gama' })).text).toContain('Opções: alfa, beta')
   expect((await $.command.run({ command: 'gsd-band', args: 'beta' })).text).toContain('monitorando beta')
+  expect((await ui.find({ type: 'Text', text: /GSD ► MANAGER/ }))?.text).toContain('beta · v3.0')
+  await ui.unmount()
+})
+
+test('o ponteiro da sessão do GSD vence o active-workstream', async ($, on) => {
+  seedWorkstreams(on, 'alfa', 'beta')
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount(DESKTOP)
+
   expect((await ui.find({ type: 'Text', text: /GSD ► MANAGER/ }))?.text).toContain('beta · v3.0')
   await ui.unmount()
 })
