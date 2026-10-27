@@ -20,9 +20,9 @@ export const readMilestone = (stateMd: string, workstream: string | null = null)
   return { workstream, version, name: field(front, 'milestone_name') ?? '' }
 }
 
-/** Fases do milestone atual: a lista da seção "## Phases" fora de <details>. */
+/** Fases do milestone atual: a lista da seção "## Phases" (ou "## Fases") fora de <details>. */
 export const readPhases = (roadmap: string): { number: string; name: string; isChecked: boolean }[] => {
-  const start = roadmap.indexOf('\n## Phases')
+  const start = roadmap.search(/\n## (Phases|Fases)\b/)
   if (start < 0) return []
   const rest = roadmap.slice(start + 1)
   const end = rest.indexOf('\n## ', 3)

@@ -153,7 +153,7 @@ const seedWorkstreams = (on: Parameters<TestBody>[1], active = '', session = '')
     if (e.path === '/.planning/workstreams/alfa/STATE.md') return { value: WS_STATE('v2.0') }
     if (e.path === '/.planning/workstreams/beta/STATE.md') return { value: WS_STATE('v3.0') }
     if (e.path === '/.planning/workstreams/gama/STATE.md') return { value: WS_STATE('v4.0').replace('executing', 'milestone-complete') }
-    if (e.path.endsWith('ROADMAP.md') && e.path.includes('workstreams')) return { value: ROADMAP }
+    if (e.path.endsWith('ROADMAP.md') && e.path.includes('workstreams')) return { value: ROADMAP.replace('## Phases', '## Fases') }
     return { deny: 'ENOENT' }
   })
   on('fs.list', (_, e) => ({

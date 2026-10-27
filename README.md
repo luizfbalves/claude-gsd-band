@@ -78,7 +78,7 @@ Se o terminal tiver pouca altura, ele encolhe para o cabeçalho, a barra e a fas
 | Dado | Fonte |
 |------|-------|
 | Milestone | frontmatter de `.planning/STATE.md` ou `.planning/workstreams/<nome>/STATE.md` (`milestone`, `milestone_name`, `status`) |
-| Fases | lista `- [ ] **Phase N: Nome**` na seção `## Phases` do `ROADMAP.md`, ignorando o que está dentro de `<details>` |
+| Fases | lista `- [ ] **Phase N: Nome**` na seção `## Phases` (ou `## Fases`) do `ROADMAP.md`, ignorando o que está dentro de `<details>` |
 | D / P / E | arquivos em `.planning/phases/NN-nome/` |
 
 Nada é gravado no projeto, o mod só lê esses arquivos. Ele relê tudo ao abrir a sessão, ao fim de cada turno, logo depois de uma ferramenta mexer em `.planning/` e a cada 15 segundos.
