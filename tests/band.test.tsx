@@ -137,6 +137,9 @@ test('botão da próxima ação roda o comando GSD da fase ativa', async ($, on)
   await ui.unmount()
 })
 
+const run = ($: Parameters<TestBody>[0], command: string, args: string) =>
+  $.command.run({ command, args } as Parameters<typeof $.command.run>[0])
+
 const WS_STATE = (version: string) => STATE.replace('v1.23', version).replace('Milestone de exemplo', `Milestone ${version}`)
 
 const seedWorkstreams = (on: Parameters<TestBody>[1], active = '', session = '') => {
@@ -190,8 +193,8 @@ test('/gsd-band <nome> escolhe a workstream', async ($, on) => {
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount(DESKTOP)
 
-  expect((await $.command.run({ command: 'gsd-band', args: 'gama' })).text).toContain('Opções: alfa, beta')
-  expect((await $.command.run({ command: 'gsd-band', args: 'beta' })).text).toContain('monitorando beta')
+  expect((await run($, 'gsd-band', 'gama')).text).toContain('Opções: alfa, beta')
+  expect((await run($, 'gsd-band', 'beta')).text).toContain('monitorando beta')
   expect((await ui.find({ type: 'Text', text: /GSD ► MANAGER/ }))?.text).toContain('beta · v3.0')
   await ui.unmount()
 })
@@ -202,5 +205,24 @@ test('o ponteiro da sessão do GSD vence o active-workstream', async ($, on) => 
   const ui = await $.ui.mount(DESKTOP)
 
   expect((await ui.find({ type: 'Text', text: /GSD ► MANAGER/ }))?.text).toContain('beta · v3.0')
+  await ui.unmount()
+})
+
+test('mostra o comando GSD em andamento e segue a workstream dele', async ($, on) => {
+  seedWorkstreams(on, 'alfa')
+  on('command.run', () => ({ text: '' }))
+  on('agent.list', () => ({
+    value: [
+      { id: 'a1', description: 'Running orders specs', type: 'gsd-executor', status: 'running' },
+      { id: 'a2', description: 'Outro', type: 'Explore', status: 'running' },
+      { id: 'a3', description: 'Antigo', type: 'gsd-planner', status: 'completed' },
+    ],
+  }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount(DESKTOP)
+
+  await run($, 'gsd-execute-phase', '12 --ws beta')
+  expect((await ui.find({ type: 'Text', text: /GSD ► MANAGER/ }))?.text).toContain('beta · v3.0')
+  expect((await ui.find({ type: 'Text', text: /◆/ }))?.text).toBe('◆ Executando fase 12 · gsd-executor: Running orders specs')
   await ui.unmount()
 })

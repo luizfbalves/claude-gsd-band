@@ -1,8 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Board, Mark } from '../types'
-import { buildBoard, dirNumber, nextAction, pickBoard, progress, readMilestone, readPhases } from './board'
+import type { Activity, Board, Mark } from '../types'
+import { buildBoard, describeActivity, dirNumber, nextAction, parseGsd, pickBoard, progress, readMilestone, readPhases, touchedWorkstream } from './board'
 import type { PhaseFiles } from './board'
 import { buildGrid, pulseCells } from './raster'
 
@@ -10,6 +10,8 @@ const board = atom({ plugin: 'gsd-band', key: 'board' } as const, null, { shape:
 const isHidden = atom({ plugin: 'gsd-band', key: 'isHidden' } as const, false)
 const choices = atom({ plugin: 'gsd-band', key: 'choices' } as const, [])
 const selected = atom({ plugin: 'gsd-band', key: 'selected' } as const, null)
+const hint = atom({ plugin: 'gsd-band', key: 'hint' } as const, null)
+const activity = atom({ plugin: 'gsd-band', key: 'activity' } as const, null)
 
 const GLYPH: Record<Mark, string> = { done: '✓', partial: '◆', ready: '○', blocked: '·' }
 const BAR = 20
@@ -85,14 +87,36 @@ const readSessionPointer = async ($: EngineInterface, planning: string): Promise
   return (await $.fs.read(`${tmp}/gsd-workstream-sessions/${projectId}/${sessionKey}`)).trim()
 }
 
+const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
+
+/** Junta o comando GSD em andamento com os subagentes gsd-* rodando agora. */
+const refreshActivity = async ($: EngineInterface, command?: Pick<Activity, 'command' | 'phase'> | null): Promise<void> => {
+  const agents = (await $.agent.list().catch(() => []))
+    .filter(a => a.type.startsWith('gsd-') && (a.status === 'running' || a.status === 'pending'))
+    .map(a => ({ type: a.type, description: a.description }))
+  const before = await read($, activity)
+  const base = command === undefined ? { command: before?.command ?? null, phase: before?.phase ?? null } : command ?? { command: null, phase: null }
+  const next: Activity | null = base.command || agents.length > 0 ? { ...base, agents } : null
+  if (!same(before, next)) await update($, activity, () => next)
+}
+
+/** Registra um comando ou skill GSD: o que está rodando e em qual workstream. */
+const noteGsd = async ($: EngineInterface, command: string, args?: string): Promise<void> => {
+  const gsd = parseGsd(command, args)
+  if (!gsd) return
+  if (gsd.workstream) await update($, hint, () => gsd.workstream)
+  await refreshActivity($, { command: gsd.command, phase: gsd.phase })
+}
+
 const refresh = async ($: EngineInterface): Promise<void> => {
   const planning = `${(await $.session.cwd()).replace(/\/$/, '')}/.planning`
   const boards = await loadBoards($, planning)
   const active = await readActive($, planning)
-  const next = pickBoard(boards, await read($, selected), active)
+  const next = pickBoard(boards, await read($, selected), await read($, hint), active)
   const ids = boards.map(b => b.workstream ?? '')
-  if (JSON.stringify(await read($, choices)) !== JSON.stringify(ids)) await update($, choices, () => ids)
-  if (JSON.stringify(await read($, board)) !== JSON.stringify(next)) await update($, board, () => next)
+  if (!same(await read($, choices), ids)) await update($, choices, () => ids)
+  if (!same(await read($, board), next)) await update($, board, () => next)
+  await refreshActivity($)
 }
 
 const label = (id: string): string => id || 'raiz'
@@ -119,15 +143,29 @@ export const register: Register = on => {
   })
 
   on('turn.complete', async ($, e, next) => {
+    // O comando GSD termina com o turno principal; subagentes seguem pela lista de agentes.
+    if (e.agentId === undefined) await refreshActivity($, null)
     await refresh($)
+
+    return next(e)
+  })
+
+  on('command.run', async ($, e, next) => {
+    if (e.command !== 'gsd-band') await noteGsd($, e.command, e.args)
 
     return next(e)
   })
 
   // Atualiza na hora quando uma ferramenta mexe nos arquivos do GSD, sem esperar o timer.
   on('tool.call', async ($, e, next) => {
+    if (e.tool === 'Skill' && 'skill' in e && typeof e.skill === 'string') {
+      await noteGsd($, e.skill, 'args' in e && typeof e.args === 'string' ? e.args : '')
+    }
     const result = await next(e)
-    if (JSON.stringify(e).includes('.planning')) void refresh($)
+    const text = JSON.stringify(e)
+    const ws = touchedWorkstream(text)
+    if (ws) await update($, hint, () => ws)
+    if (text.includes('.planning') || e.tool === 'Agent') void refresh($)
 
     return result
   })
@@ -140,6 +178,7 @@ export const register: Register = on => {
       const id = name === 'raiz' ? '' : name
       if (!ids.includes(id)) return { text: `Sem milestone em progresso em "${name}". Opções: ${ids.map(label).join(', ') || 'nenhuma'}.` }
       await update($, selected, () => id)
+      await update($, hint, () => null)
       await update($, isHidden, () => false)
       await refresh($)
 
@@ -165,7 +204,8 @@ export const register: Register = on => {
     const percent = progress(data)
     const filled = Math.round((percent / 100) * BAR)
     const action = nextAction(data)
-    const isCompact = e.props.maxRows < data.rows.length + 5
+    const doing = describeActivity(await read($, activity))
+    const isCompact = e.props.maxRows < data.rows.length + (doing ? 6 : 5)
     const rows = isCompact ? data.rows.filter(r => r.status !== 'Concluída').slice(0, 1) : data.rows
 
     const elements = $.ui.resolve(e)
@@ -208,11 +248,16 @@ export const register: Register = on => {
             />
           )}
         </Box>
+        {doing && (
+          <Text color="yellow" wrap="truncate-end">
+            ◆ {doing}
+          </Text>
+        )}
       </Box>
     )
 
     if (Raster) {
-      const grid = buildGrid(data, e.props.bodyColumns, e.props.maxRows < data.rows.length + 6)
+      const grid = buildGrid(data, e.props.bodyColumns, e.props.maxRows < data.rows.length + (doing ? 7 : 6))
 
       return (
         <Box flexDirection="column" marginBottom={1}>

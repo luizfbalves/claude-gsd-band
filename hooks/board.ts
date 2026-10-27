@@ -1,4 +1,4 @@
-import type { Board, PhaseRow } from '../types'
+import type { Activity, Board, PhaseRow } from '../types'
 
 export type PhaseFiles = { hasContext: boolean; plans: number; summaries: number }
 
@@ -101,9 +101,49 @@ export const nextAction = (board: Board): { command: string; args: string } | nu
   return null
 }
 
-/** Qual board mostrar: a escolha da pessoa, senão a workstream ativa do GSD, senão a primeira. */
-export const pickBoard = (boards: Board[], selected: string | null, active: string): Board | null => {
-  const by = (id: string) => boards.find(b => (b.workstream ?? '') === id)
+/**
+ * Qual board mostrar: a escolha da pessoa, senão a workstream em uso agora,
+ * senão a ativa do GSD, senão a primeira.
+ */
+export const pickBoard = (boards: Board[], selected: string | null, hint: string | null, active: string): Board | null => {
+  const by = (id: string | null) => (id === null ? undefined : boards.find(b => (b.workstream ?? '') === id))
 
-  return (selected !== null ? by(selected) : undefined) ?? by(active) ?? boards[0] ?? null
+  return by(selected) ?? by(hint) ?? by(active) ?? boards[0] ?? null
+}
+
+/** Um comando ou skill GSD com seus argumentos ("24 --ws 99food"), ou null. */
+export const parseGsd = (command: string, args = ''): { command: string; phase: string | null; workstream: string | null } | null => {
+  const name = command.replace(/^\//, '')
+  if (!name.startsWith('gsd-')) return null
+
+  return {
+    command: name,
+    phase: args.match(/(?:^|\s)(\d+(?:\.\d+)?)(?=\s|$)/)?.[1] ?? null,
+    workstream: args.match(/--ws[\s=]+([A-Za-z0-9._-]+)/)?.[1] ?? null,
+  }
+}
+
+/** A workstream de um caminho dentro de `.planning/workstreams/<nome>/`, ou null. */
+export const touchedWorkstream = (text: string): string | null =>
+  [...text.matchAll(/\.planning\/workstreams\/([A-Za-z0-9._-]+)/g)].at(-1)?.[1] ?? null
+
+const VERB: Record<string, string> = {
+  'gsd-discuss-phase': 'Discutindo',
+  'gsd-plan-phase': 'Planejando',
+  'gsd-execute-phase': 'Executando',
+  'gsd-verify-work': 'Verificando',
+  'gsd-code-review': 'Revisando',
+}
+
+/** "Executando fase 24 · gsd-executor: Running specs", ou null sem nada rodando. */
+export const describeActivity = (activity: Activity | null): string | null => {
+  if (!activity) return null
+  const parts: string[] = []
+  if (activity.command) {
+    const verb = VERB[activity.command]
+    parts.push(verb ? `${verb}${activity.phase ? ` fase ${activity.phase}` : ''}` : `/${activity.command}${activity.phase ? ` ${activity.phase}` : ''}`)
+  }
+  for (const agent of activity.agents) parts.push(agent.description ? `${agent.type}: ${agent.description}` : agent.type)
+
+  return parts.length > 0 ? parts.join(' · ') : null
 }

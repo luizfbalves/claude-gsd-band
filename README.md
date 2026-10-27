@@ -59,11 +59,22 @@ O painel só aparece quando todas estas condições valem:
 - o `status:` não indica milestone encerrado (`complete`, `archived`, `shipped`, `closed`);
 - ainda existe pelo menos uma fase não concluída no `.planning/ROADMAP.md`.
 
+## Ação em andamento
+
+Enquanto um comando GSD roda, uma linha abaixo do cabeçalho diz o que está acontecendo, com os subagentes `gsd-*` ativos:
+
+```
+◆ Executando fase 24 · gsd-executor: Running connection and orders Playwright specs
+```
+
+A linha some quando o turno termina e nenhum subagente `gsd-*` está rodando.
+
 ## Workstreams
 
 Com workstreams do GSD o projeto pode ter mais de um milestone em andamento, um em `.planning/` e um em cada `.planning/workstreams/<nome>/`. O painel monitora um por vez:
 
-- por padrão, a workstream ativa do GSD (`.planning/active-workstream`), senão a primeira com milestone em progresso;
+- por padrão, a workstream em uso agora: a do último comando GSD com `--ws <nome>` ou do último arquivo tocado em `.planning/workstreams/<nome>/`;
+- sem isso, a workstream ativa do GSD (o ponteiro da sessão ou `.planning/active-workstream`), senão a primeira com milestone em progresso;
 - o nome da workstream aparece no cabeçalho, antes da versão;
 - com mais de uma opção aparece o botão **`⇄ <próxima>`**, que alterna entre elas;
 - `/gsd-band <nome>` escolhe uma direto (`/gsd-band raiz` para o `.planning/` raiz);
