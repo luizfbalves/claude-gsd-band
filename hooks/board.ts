@@ -2,7 +2,7 @@ import type { Board, PhaseRow } from '../types'
 
 export type PhaseFiles = { hasContext: boolean; plans: number; summaries: number }
 
-type Milestone = { version: string; name: string }
+type Milestone = { workstream: string | null; version: string; name: string }
 
 const CLOSED = /complete|archived|shipped|closed/i
 
@@ -10,14 +10,14 @@ const field = (text: string, key: string): string | undefined =>
   text.match(new RegExp(`^${key}:\\s*"?([^"\\n]*)"?\\s*$`, 'm'))?.[1]?.trim()
 
 /** Milestone em progresso pelo frontmatter do STATE.md, ou null. */
-export const readMilestone = (stateMd: string): Milestone | null => {
+export const readMilestone = (stateMd: string, workstream: string | null = null): Milestone | null => {
   const front = stateMd.match(/^---\n([\s\S]*?)\n---/)?.[1]
   if (!front) return null
   const version = field(front, 'milestone')
   const status = field(front, 'status') ?? ''
   if (!version || CLOSED.test(status)) return null
 
-  return { version, name: field(front, 'milestone_name') ?? '' }
+  return { workstream, version, name: field(front, 'milestone_name') ?? '' }
 }
 
 /** Fases do milestone atual: a lista da seção "## Phases" fora de <details>. */
@@ -93,9 +93,17 @@ export const progress = (board: Board): number => {
 export const nextAction = (board: Board): { command: string; args: string } | null => {
   const row = board.rows.find(r => r.status !== 'Concluída')
   if (!row) return null
-  if (row.d === 'ready') return { command: 'gsd-discuss-phase', args: row.number }
-  if (row.p === 'ready') return { command: 'gsd-plan-phase', args: row.number }
-  if (row.e === 'ready' || row.e === 'partial') return { command: 'gsd-execute-phase', args: row.number }
+  const args = board.workstream ? `${row.number} --ws ${board.workstream}` : row.number
+  if (row.d === 'ready') return { command: 'gsd-discuss-phase', args }
+  if (row.p === 'ready') return { command: 'gsd-plan-phase', args }
+  if (row.e === 'ready' || row.e === 'partial') return { command: 'gsd-execute-phase', args }
 
   return null
+}
+
+/** Qual board mostrar: a escolha da pessoa, senão a workstream ativa do GSD, senão a primeira. */
+export const pickBoard = (boards: Board[], selected: string | null, active: string): Board | null => {
+  const by = (id: string) => boards.find(b => (b.workstream ?? '') === id)
+
+  return (selected !== null ? by(selected) : undefined) ?? by(active) ?? boards[0] ?? null
 }

@@ -2,21 +2,7 @@
 
 Um painel fixo acima do prompt do Claude Code que mostra em que ponto está o milestone GSD do projeto. São as mesmas informações do `/gsd-manager`, sem precisar rodar o comando.
 
-```
-────────────────────────────────────────────────────────────────────────────────
-⠾ GSD ► MANAGER · v1.23 Assistente do lojista [ /clear ] [ ▶ /gsd-execute-phase 12 ]
-████ ███ █████ ███████████████▎                  65% · 3 de 6 fases
-
-                                              D  P  E
-  9   Fundação do assistente na API           ▇▇ ▇▇ ▇▇  5/5                 Concluída
-  10  FAB e painel no console                 ▇▇ ▇▇ ▇▇  4/4                 Concluída
-  11  Catálogo de ajuda e contexto do lojista ▇▇ ▇▇ ▇▇  6/6                 Concluída
-▶ 12  Consulta de dados e diagnóstico         ▇▇ ▇▇ ▇▇  ■■■■■■■■■■■■■■■■■□□ Execução parcial (17/19)
-  13  Ações com confirmação                   ▇▇ ▇▇ ▇▇                      Pronta para discussão
-  14  Rollout no dev e em produção            ▇▇ ▇▇ ▇▇                      Aguarda fase 13
-```
-
-No terminal os blocos `▇▇` são coloridos pelo estado de cada etapa.
+![Painel gsd-band no terminal](docs/painel.png)
 
 Em projetos sem milestone em andamento o painel não aparece e não ocupa espaço.
 
@@ -73,13 +59,25 @@ O painel só aparece quando todas estas condições valem:
 - o `status:` não indica milestone encerrado (`complete`, `archived`, `shipped`, `closed`);
 - ainda existe pelo menos uma fase não concluída no `.planning/ROADMAP.md`.
 
+## Workstreams
+
+Com workstreams do GSD o projeto pode ter mais de um milestone em andamento, um em `.planning/` e um em cada `.planning/workstreams/<nome>/`. O painel monitora um por vez:
+
+- por padrão, a workstream ativa do GSD (`.planning/active-workstream`), senão a primeira com milestone em progresso;
+- o nome da workstream aparece no cabeçalho, antes da versão;
+- com mais de uma opção aparece o botão **`⇄ <próxima>`**, que alterna entre elas;
+- `/gsd-band <nome>` escolhe uma direto (`/gsd-band raiz` para o `.planning/` raiz);
+- o botão da próxima ação leva `--ws <nome>`.
+
+Workstreams com milestone encerrado ou sem fase pendente ficam fora da lista.
+
 Se o terminal tiver pouca altura, ele encolhe para o cabeçalho, a barra e a fase em andamento.
 
 ## De onde vêm os dados
 
 | Dado | Fonte |
 |------|-------|
-| Milestone | frontmatter de `.planning/STATE.md` (`milestone`, `milestone_name`, `status`) |
+| Milestone | frontmatter de `.planning/STATE.md` ou `.planning/workstreams/<nome>/STATE.md` (`milestone`, `milestone_name`, `status`) |
 | Fases | lista `- [ ] **Phase N: Nome**` na seção `## Phases` do `ROADMAP.md`, ignorando o que está dentro de `<details>` |
 | D / P / E | arquivos em `.planning/phases/NN-nome/` |
 
@@ -87,7 +85,7 @@ Nada é gravado no projeto, o mod só lê esses arquivos. Ele relê tudo ao abri
 
 ## Comando
 
-`/gsd-band` esconde ou mostra o painel na sessão atual.
+`/gsd-band` esconde ou mostra o painel na sessão atual. `/gsd-band <nome>` escolhe a workstream monitorada.
 
 ## Botões
 

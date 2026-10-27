@@ -2,12 +2,14 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Board, Mark } from '../types'
-import { buildBoard, dirNumber, nextAction, progress, readMilestone, readPhases } from './board'
+import { buildBoard, dirNumber, nextAction, pickBoard, progress, readMilestone, readPhases } from './board'
 import type { PhaseFiles } from './board'
 import { buildGrid, pulseCells } from './raster'
 
-const board = atom({ plugin: 'gsd-band', key: 'board' } as const, null, { shape: 'board-2' })
+const board = atom({ plugin: 'gsd-band', key: 'board' } as const, null, { shape: 'board-3' })
 const isHidden = atom({ plugin: 'gsd-band', key: 'isHidden' } as const, false)
+const choices = atom({ plugin: 'gsd-band', key: 'choices' } as const, [])
+const selected = atom({ plugin: 'gsd-band', key: 'selected' } as const, null)
 
 const GLYPH: Record<Mark, string> = { done: '✓', partial: '◆', ready: '○', blocked: '·' }
 const BAR = 20
@@ -34,10 +36,9 @@ const readFiles = async ($: EngineInterface, root: string): Promise<Map<number, 
   return files
 }
 
-const loadBoard = async ($: EngineInterface): Promise<Board | null> => {
-  const root = `${(await $.session.cwd()).replace(/\/$/, '')}/.planning`
+const loadBoard = async ($: EngineInterface, root: string, workstream: string | null): Promise<Board | null> => {
   const stateMd = await $.fs.read(`${root}/STATE.md`).catch(() => '')
-  const milestone = readMilestone(stateMd)
+  const milestone = readMilestone(stateMd, workstream)
   if (!milestone) return null
   const phases = readPhases(await $.fs.read(`${root}/ROADMAP.md`).catch(() => ''))
   if (phases.length === 0) return null
@@ -46,18 +47,40 @@ const loadBoard = async ($: EngineInterface): Promise<Board | null> => {
   return next.done === next.total ? null : next
 }
 
-const refresh = async ($: EngineInterface): Promise<void> => {
-  const next = await loadBoard($)
-  const before = await read($, board)
-  if (JSON.stringify(before) !== JSON.stringify(next)) await update($, board, () => next)
+/** Milestones em progresso no `.planning/` raiz e em cada workstream. */
+const loadBoards = async ($: EngineInterface, planning: string): Promise<Board[]> => {
+  const dirs = await $.fs.list(`${planning}/workstreams`).catch(() => [])
+  const names = dirs.filter(d => d.kind === 'dir').map(d => d.name).sort()
+  const boards = await Promise.all([
+    loadBoard($, planning, null),
+    ...names.map(name => loadBoard($, `${planning}/workstreams/${name}`, name)),
+  ])
+
+  return boards.filter((b): b is Board => b !== null)
 }
+
+const refresh = async ($: EngineInterface): Promise<void> => {
+  const planning = `${(await $.session.cwd()).replace(/\/$/, '')}/.planning`
+  const boards = await loadBoards($, planning)
+  const active = (await $.fs.read(`${planning}/active-workstream`).catch(() => '')).trim()
+  const next = pickBoard(boards, await read($, selected), active)
+  const ids = boards.map(b => b.workstream ?? '')
+  if (JSON.stringify(await read($, choices)) !== JSON.stringify(ids)) await update($, choices, () => ids)
+  if (JSON.stringify(await read($, board)) !== JSON.stringify(next)) await update($, board, () => next)
+}
+
+const label = (id: string): string => id || 'raiz'
 
 const markColor = (mark: Mark): string | undefined =>
   mark === 'done' ? 'green' : mark === 'partial' ? 'yellow' : mark === 'ready' ? 'cyan' : undefined
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'gsd-band', description: 'Mostra ou esconde o painel GSD acima do prompt' })
+    await $.command.register({
+      name: 'gsd-band',
+      description: 'Mostra ou esconde o painel GSD; com um nome, escolhe a workstream monitorada',
+      argumentHint: '[workstream]',
+    })
     await refresh($)
     $.clock.every(15000, () => refresh($))
     $.clock.every(TICK, () => {
@@ -83,7 +106,19 @@ export const register: Register = on => {
     return result
   })
 
-  on('command.run', { command: 'gsd-band' }, async $ => {
+  on('command.run', { command: 'gsd-band' }, async ($, e) => {
+    const name = e.args.trim()
+    if (name) {
+      await refresh($)
+      const ids = await read($, choices)
+      const id = name === 'raiz' ? '' : name
+      if (!ids.includes(id)) return { text: `Sem milestone em progresso em "${name}". Opções: ${ids.map(label).join(', ') || 'nenhuma'}.` }
+      await update($, selected, () => id)
+      await update($, isHidden, () => false)
+      await refresh($)
+
+      return { text: `Painel GSD monitorando ${label(id)}.` }
+    }
     const hidden = await update($, isHidden, v => !v)
     await refresh($)
 
@@ -98,6 +133,9 @@ export const register: Register = on => {
     }
 
     const { Box, Button, Text } = $.ui.resolve(e)
+    const ids = await read($, choices)
+    const current = data.workstream ?? ''
+    const following = ids[(ids.indexOf(current) + 1) % ids.length] ?? current
     const percent = progress(data)
     const filled = Math.round((percent / 100) * BAR)
     const action = nextAction(data)
@@ -115,8 +153,19 @@ export const register: Register = on => {
         <Box>
           {Raster && <Raster key="pulse" columns={2} rows={1} cells={pulseCells(frame, e.props.isWorking)} />}
           <Text dimColor>
-            GSD ► MANAGER · {data.version} {data.name}{' '}
+            GSD ► MANAGER · {data.workstream ? `${data.workstream} · ` : ''}{data.version} {data.name}{' '}
           </Text>
+          {ids.length > 1 && (
+            <Button
+              key="switch"
+              label={`⇄ ${label(following)}`}
+              onPress={async () => {
+                await update($, selected, () => following)
+                await refresh($)
+              }}
+            />
+          )}
+          {ids.length > 1 && <Text> </Text>}
           <Button
             key="clear"
             label="/clear"

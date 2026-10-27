@@ -38,7 +38,7 @@ const seed = (on: Parameters<TestBody>[1], state = STATE) => {
   on('clock.every', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.cwd', () => ({ value: '/' }))
-  on('fs.read', (_, e) => ({ value: e.path.endsWith('STATE.md') ? state : ROADMAP }))
+  on('fs.read', (_, e) => ({ value: e.path.endsWith('STATE.md') ? state : e.path.endsWith('active-workstream') ? '' : ROADMAP }))
   on('fs.list', (_, e) => ({ value: LISTS[e.path ?? ''] ?? [] }))
 }
 
@@ -134,5 +134,60 @@ test('botão da próxima ação roda o comando GSD da fase ativa', async ($, on)
   expect((await ui.find({ type: 'Button', key: 'next' }))?.props.label).toBe('▶ /gsd-execute-phase 12')
   await ui.press({ key: 'next' })
   expect(runs).toContain('gsd-execute-phase 12')
+  await ui.unmount()
+})
+
+const WS_STATE = (version: string) => STATE.replace('v1.23', version).replace('Milestone de exemplo', `Milestone ${version}`)
+
+const seedWorkstreams = (on: Parameters<TestBody>[1], active = '') => {
+  on('command.register', () => ({ value: { command: 'gsd-band' } }))
+  on('clock.every', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.cwd', () => ({ value: '/' }))
+  on('fs.read', (_, e) => {
+    if (e.path === '/.planning/active-workstream') return { value: active }
+    if (e.path === '/.planning/workstreams/alfa/STATE.md') return { value: WS_STATE('v2.0') }
+    if (e.path === '/.planning/workstreams/beta/STATE.md') return { value: WS_STATE('v3.0') }
+    if (e.path === '/.planning/workstreams/gama/STATE.md') return { value: WS_STATE('v4.0').replace('executing', 'milestone-complete') }
+    if (e.path.endsWith('ROADMAP.md') && e.path.includes('workstreams')) return { value: ROADMAP }
+    return { deny: 'ENOENT' }
+  })
+  on('fs.list', (_, e) => ({
+    value: e.path === '/.planning/workstreams' ? [entry('alfa', 'dir'), entry('beta', 'dir'), entry('gama', 'dir')] : [],
+  }))
+}
+
+test('segue a workstream ativa do GSD e passa --ws para a próxima ação', async ($, on) => {
+  seedWorkstreams(on, 'beta')
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount(DESKTOP)
+
+  expect((await ui.find({ type: 'Text', text: /GSD ► MANAGER/ }))?.text).toContain('beta · v3.0')
+  expect((await ui.find({ type: 'Button', key: 'next' }))?.props.label).toBe('▶ /gsd-discuss-phase 12 --ws beta')
+  expect((await ui.find({ type: 'Button', key: 'switch' }))?.props.label).toBe('⇄ alfa')
+  await ui.unmount()
+})
+
+test('botão troca o milestone monitorado e ignora workstream encerrada', async ($, on) => {
+  seedWorkstreams(on)
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount(DESKTOP)
+
+  expect((await ui.find({ type: 'Text', text: /GSD ► MANAGER/ }))?.text).toContain('alfa · v2.0')
+  await ui.press({ key: 'switch' })
+  expect((await ui.find({ type: 'Text', text: /GSD ► MANAGER/ }))?.text).toContain('beta · v3.0')
+  await ui.press({ key: 'switch' })
+  expect((await ui.find({ type: 'Text', text: /GSD ► MANAGER/ }))?.text).toContain('alfa · v2.0')
+  await ui.unmount()
+})
+
+test('/gsd-band <nome> escolhe a workstream', async ($, on) => {
+  seedWorkstreams(on, 'alfa')
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount(DESKTOP)
+
+  expect((await $.command.run({ command: 'gsd-band', args: 'gama' })).text).toContain('Opções: alfa, beta')
+  expect((await $.command.run({ command: 'gsd-band', args: 'beta' })).text).toContain('monitorando beta')
+  expect((await ui.find({ type: 'Text', text: /GSD ► MANAGER/ }))?.text).toContain('beta · v3.0')
   await ui.unmount()
 })
