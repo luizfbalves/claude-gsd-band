@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Activity, Board, Mark } from '../types'
-import { buildBoard, describeActivity, dirNumber, nextAction, parseGsd, pickBoard, progress, readMilestone, readPhases, touchedWorkstream } from './board'
+import { actionLabel, buildBoard, describeActivity, dirNumber, nextAction, parseGsd, pickBoard, progress, readMilestone, readPhases, touchedWorkstream } from './board'
 import type { PhaseFiles } from './board'
 import { buildGrid, pulseCells } from './raster'
 
@@ -219,11 +219,23 @@ export const register: Register = on => {
         <Box>
           {Raster && <Raster key="pulse" columns={2} rows={1} cells={pulseCells(frame, e.props.isWorking)} />}
           <Text dimColor>
-            GSD ► MANAGER · {data.workstream ? `${data.workstream} · ` : ''}{data.version} {data.name}{' '}
+            GSD ► MANAGER · {data.workstream ? `${data.workstream} · ` : ''}{data.version} {data.name}{'  '}
           </Text>
+          {action && (
+            <Button
+              key="next"
+              variant="primary"
+              label={`▶ ${actionLabel(action)}`}
+              onPress={() =>
+                $.command.run(action).catch(err => $.ui.toast(`/${action.command} falhou: ${err}`))
+              }
+            />
+          )}
+          {action && <Text>  </Text>}
           {ids.length > 1 && (
             <Button
               key="switch"
+              dimColor
               label={`⇄ ${label(following)}`}
               onPress={async () => {
                 await update($, selected, () => following)
@@ -234,19 +246,10 @@ export const register: Register = on => {
           {ids.length > 1 && <Text> </Text>}
           <Button
             key="clear"
+            dimColor
             label="/clear"
             onPress={() => $.command.run({ command: 'clear' }).catch(err => $.ui.toast(`/clear falhou: ${err}`))}
           />
-          {action && <Text> </Text>}
-          {action && (
-            <Button
-              key="next"
-              label={`▶ /${action.command} ${action.args}`}
-              onPress={() =>
-                $.command.run(action).catch(err => $.ui.toast(`/${action.command} falhou: ${err}`))
-              }
-            />
-          )}
         </Box>
         {doing && (
           <Text color="yellow" wrap="truncate-end">

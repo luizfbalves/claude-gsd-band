@@ -100,8 +100,9 @@ Nada é gravado no projeto, o mod só lê esses arquivos. Ele relê tudo ao abri
 
 ## Botões
 
-- **`/clear`** limpa a conversa.
-- **`▶ /gsd-…`** roda o próximo comando GSD da primeira fase não concluída: `gsd-discuss-phase`, `gsd-plan-phase` ou `gsd-execute-phase`, com o número da fase.
+- **`▶ Executar fase N`**, na cor de destaque, roda o próximo comando GSD da primeira fase não concluída: `gsd-discuss-phase` (Discutir), `gsd-plan-phase` (Planejar) ou `gsd-execute-phase` (Executar), com o número da fase e `--ws <nome>` quando há workstream.
+- **`⇄ <workstream>`**, apagado, troca o milestone monitorado (só com mais de uma opção).
+- **`/clear`**, apagado, limpa a conversa.
 
 ## Desenvolvimento
 

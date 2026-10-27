@@ -131,7 +131,7 @@ test('botão da próxima ação roda o comando GSD da fase ativa', async ($, on)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount(BAND)
 
-  expect((await ui.find({ type: 'Button', key: 'next' }))?.props.label).toBe('▶ /gsd-execute-phase 12')
+  expect((await ui.find({ type: 'Button', key: 'next' }))?.props.label).toBe('▶ Executar fase 12')
   await ui.press({ key: 'next' })
   expect(runs).toContain('gsd-execute-phase 12')
   await ui.unmount()
@@ -166,11 +166,20 @@ const seedWorkstreams = (on: Parameters<TestBody>[1], active = '', session = '')
 
 test('segue a workstream ativa do GSD e passa --ws para a próxima ação', async ($, on) => {
   seedWorkstreams(on, 'beta')
+  const runs: string[] = []
+  on('command.run', (_, e) => {
+    runs.push(`${e.command} ${e.args}`)
+    return { text: '' }
+  })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount(DESKTOP)
 
   expect((await ui.find({ type: 'Text', text: /GSD ► MANAGER/ }))?.text).toContain('beta · v3.0')
-  expect((await ui.find({ type: 'Button', key: 'next' }))?.props.label).toBe('▶ /gsd-discuss-phase 12 --ws beta')
+  const next = await ui.find({ type: 'Button', key: 'next' })
+  expect(next?.props.label).toBe('▶ Discutir fase 12')
+  expect(next?.props.variant).toBe('primary')
+  await ui.press({ key: 'next' })
+  expect(runs).toContain('gsd-discuss-phase 12 --ws beta')
   expect((await ui.find({ type: 'Button', key: 'switch' }))?.props.label).toBe('⇄ alfa')
   await ui.unmount()
 })

@@ -101,6 +101,16 @@ export const nextAction = (board: Board): { command: string; args: string } | nu
   return null
 }
 
+const ACTION: Record<string, string> = {
+  'gsd-discuss-phase': 'Discutir',
+  'gsd-plan-phase': 'Planejar',
+  'gsd-execute-phase': 'Executar',
+}
+
+/** Rótulo curto do botão: "Executar fase 24". */
+export const actionLabel = (action: { command: string; args: string }): string =>
+  `${ACTION[action.command] ?? `/${action.command}`} fase ${action.args.split(' ')[0]}`
+
 /**
  * Qual board mostrar: a escolha da pessoa, senão a workstream em uso agora,
  * senão a ativa do GSD, senão a primeira.
