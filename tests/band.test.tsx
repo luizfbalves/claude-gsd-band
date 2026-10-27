@@ -306,3 +306,30 @@ test('coluna V e pendências vêm do VERIFICATION.md e do UAT.md', async ($, on)
   expect(board.rows[1].v).toBe('blocked')
   expect(board.pendencies).toEqual(['UAT da fase 9 com 3 itens'])
 })
+
+test('botão web sobe a página e abre no navegador', async ($, on) => {
+  seed(on)
+  on('session.id', () => ({ value: 'abc-123' }))
+  on('env.get', () => ({ value: undefined }))
+  on('agent.list', () => ({ value: [] }))
+  let browserOpened = () => {}
+  const isOpened = new Promise<void>(resolve => { browserOpened = resolve })
+  on('process.spawn', async function* () {
+    yield { stream: 'stdout' as const, text: 'PORT 4555\n' }
+    await isOpened
+    return { value: { code: 0, signal: null } }
+  })
+  on('http.fetch', () => ({ value: { status: 204, ok: true, headers: {}, text: '' } }))
+  const opened: string[][] = []
+  on('process.run', (_, e) => {
+    opened.push([...e.argv])
+    browserOpened()
+    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(BAND)
+
+  await ui.press({ key: 'web' })
+  expect(opened[0]).toEqual(['open', 'http://127.0.0.1:4555'])
+  await ui.unmount()
+})

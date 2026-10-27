@@ -96,7 +96,7 @@ Nada é gravado no projeto, o mod só lê esses arquivos (e `*-VERIFICATION.md` 
 
 ## Página web
 
-`/gsd-band web` abre uma página local com o mesmo painel e mais detalhes, para acompanhar no navegador:
+`/gsd-band web` ou o botão **`↗ web`** abre uma página local com o mesmo painel e mais detalhes, para acompanhar no navegador:
 
 - abas para cada workstream com milestone em progresso;
 - a tabela de fases com D / P / E / V e a grade de planos da fase ativa;
@@ -115,6 +115,7 @@ A página roda num servidor Node (ou Bun, se não houver Node) que o mod sobe em
 
 - **`▶ Executar fase N`**, na cor de destaque, roda o próximo comando GSD da primeira fase não concluída: `gsd-discuss-phase` (Discutir), `gsd-plan-phase` (Planejar) ou `gsd-execute-phase` (Executar), com o número da fase e `--ws <nome>` quando há workstream.
 - **`⇄ <workstream>`**, apagado, troca o milestone monitorado (só com mais de uma opção).
+- **`↗ web`**, apagado, liga a página local (se ainda não estiver ligada) e abre no navegador.
 - **`/clear`**, apagado, limpa a conversa.
 
 ## Desenvolvimento

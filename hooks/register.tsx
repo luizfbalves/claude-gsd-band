@@ -198,6 +198,21 @@ const refresh = async ($: EngineInterface): Promise<void> => {
   await refreshActivity($)
 }
 
+/** Liga a página, se preciso, e abre no navegador padrão (macOS, Linux ou WSL). */
+const openWeb = async ($: EngineInterface): Promise<void> => {
+  if (!web) await refresh($)
+  const url = web?.url ?? (await startWeb($).catch((err: Error) => {
+    void $.ui.toast(`Página do painel não subiu: ${err.message}`)
+    return null
+  }))
+  if (!url) return
+  for (const opener of ['open', 'xdg-open', 'wslview']) {
+    const { exitCode } = await $.process.run([opener, url]).catch(() => ({ exitCode: 1 }))
+    if (exitCode === 0) return
+  }
+  await $.ui.toast(`Abra ${url} no navegador`)
+}
+
 const label = (id: string): string => id || 'raiz'
 
 const markColor = (mark: Mark): string | undefined =>
@@ -336,6 +351,8 @@ export const register: Register = on => {
             />
           )}
           {ids.length > 1 && <Text> </Text>}
+          <Button key="web" dimColor label="↗ web" onPress={() => openWeb($)} />
+          <Text> </Text>
           <Button
             key="clear"
             dimColor
